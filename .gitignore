@@ -1,0 +1,18 @@
+# 凭据与运行时数据 —— 绝不入库
+.runtime/
+*.json.bak
+*.log
+__pycache__/
+*.pyc
+
+# 凭据/令牌类文件（即使散落在外也排除）
+*token*
+*credential*
+*secret*
+*password*
+*.pem
+*.key
+
+# 用户数据导出
+notes_pc_pull.json
+noteapi_service_state.json
