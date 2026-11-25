@@ -40,6 +40,32 @@ python mi_auth.py --ensure        # 凭据过期则自动续登
 4. 请求 `location` 从 Set-Cookie 取 `serviceToken`（失败则回退用 passToken）。
 5. 生成 deviceId，写入 `.runtime/mi_auth.json`（被 .gitignore 排除）。
 
+## 拉取笔记 / 待办（都已实现）
+
+两条拉取链路都在 `noteapi_pc.py`：
+
+| 数据 | API | 端点 |
+|---|---|---|
+| 笔记（含文件夹/附件） | `NotesApi(cli).list_full(sync_tag, limit)` | `GET /mic/note/pc/v3.1/user/full` |
+| 待办事项 | `TodoApi(cli).sync(sync_token, limit)` | `GET /mic/todo/pc/v1/user/records` |
+| 已删除笔记 | `cmd_recycle` / `NotesApi.list_deleted` | `GET .../full`（回收站标志） |
+| 文件夹 | `cmd_folders` | 同上 full 流里筛 folder |
+
+CLI 一键拉取（无需写代码）：
+
+```bash
+python noteapi_pc.py --login     # 首次扫码登录（或单独跑 mi_auth.py）
+python noteapi_pc.py --notes     # 拉取全部笔记 → 落盘 .runtime/notes_pc_pull.json
+python noteapi_pc.py --todos     # 拉取全部待办
+python noteapi_pc.py --recycle   # 拉取回收站
+python noteapi_pc.py --folders   # 列出文件夹
+python noteapi_pc.py             # 默认 = --notes + --todos 全量
+```
+
+翻页契约：笔记用 `syncTag`（从响应 `syncToken` 取，逐个翻到 `hasMore=false`）；
+待办用 `syncToken`，**必须回传整个 token 对象的 JSON 串**（`TodoApi.token_str(resp)`），
+传裸 `obj` 值会报 `code=10008`。
+
 ## 调用示例
 
 ```python
@@ -47,8 +73,14 @@ import noteapi_pc as n
 import mi_auth
 
 creds = mi_auth.get_credentials()          # 读 .runtime/mi_auth.json
-cli = n.Client(creds)
-notes = cli.list_full()                    # 拉取全部笔记
+auth = {"token": creds["token"], "ssecurity": creds["ssecurity"],
+        "cUserId": creds["cUserId"], "userId": creds["userId"]}
+cli = n.Client(auth)
+
+notes = n.NotesApi(cli).list_full()        # 笔记原始响应（dict）
+todos = n.TodoApi(cli).sync()              # 待办原始响应（dict）
+tk = n.TodoApi.token_str(todos)            # 下一页 syncToken（JSON 串）
+todos_page2 = n.TodoApi(cli).sync(tk)      # 继续翻页
 ```
 
 ## 安全
